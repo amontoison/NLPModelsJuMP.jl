@@ -169,3 +169,41 @@ nlp = MathOptNLPModel(model)
 println("cx = $(cons(nlp, nlp.meta.x0))")
 println("Jx = $(jac(nlp, nlp.meta.x0))")
 ```
+
+## MathOptNLSModel
+
+```@docs
+MathOptNLSModel
+```
+
+`MathOptNLSModel` is a model for nonlinear least squares using JuMP, The objective
+function of NLS problems has the form ``f(x) = \tfrac{1}{2}\|F(x)\|^2``, but specialized
+methods handle ``F`` directly, instead of ``f``.
+To use `MathOptNLSModel`, we define a JuMP model without the objective, and use `NLexpression`s to
+define the residual function ``F``.
+For instance, the Rosenbrock function can be expressed in nonlinear least squares format by
+defining
+```math
+F(x) = \begin{bmatrix} x_1 - 1\\ 10(x_2 - x_1^2) \end{bmatrix},
+```
+and noting that ``f(x) = \|F(x)\|^2`` (the constant ``\frac{1}{2}`` is ignored as it
+doesn't change the solution).
+We implement this function as
+
+```@example nls
+using NLPModels, NLPModelsJuMP, JuMP
+
+model = Model()
+x0 = [-1.2; 1.0]
+@variable(model, x[i=1:2], start=x0[i])
+@NLexpression(model, F1, x[1] - 1)
+@NLexpression(model, F2, 10 * (x[2] - x[1]^2))
+
+nls = MathOptNLSModel(model, [F1, F2], name="rosen-nls")
+
+residual(nls, nls.meta.x0)
+```
+
+```@example nls
+jac_residual(nls, nls.meta.x0)
+```
