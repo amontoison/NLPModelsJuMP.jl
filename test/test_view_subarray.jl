@@ -13,7 +13,7 @@ function test_view_subarray()
     @NLconstraint(model, -1.0 ≤ x[1] * x[2] * x[3]            ≤ 1.0)
     moinlp = MathOptNLPModel(model)
 
-    snlp = SlackModel(mpbnlp)
+    snlp = SlackModel(moinlp)
 
     model = Model()
     @variable(model, x[1:n])
@@ -22,9 +22,9 @@ function test_view_subarray()
     @NLconstraint(model, -1.0 ≤ x[1] * x[2] * x[3]            ≤ 1.0)
     @NLexpression(model, F[p=1:3], sum(x[i]^p for i = 1:n) - p)
 
-    moisnls = MathOptNLSModel(model, F)
+    moinls = MathOptNLSModel(model, F)
 
-    snls = SlackNLSModel(mpbnls)
+    snls = SlackNLSModel(moinls)
 
     for nlp in [moinlp, snlp, moinls, snls]
       test_view_subarray_nlp(nlp)

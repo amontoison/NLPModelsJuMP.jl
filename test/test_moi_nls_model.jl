@@ -3,7 +3,7 @@ println("Testing MathOptNLSModel")
 
 @printf("%-15s  %4s  %4s  %4s  %10s  %10s  %10s\n", "Problem", "nequ", "nvar", "ncon", "‖F(x₀)‖²", "‖JᵀF‖", "‖c(x₀)‖")
 # Test that every problem can be instantiated.
-for prob in [:hs30, :hs43, :mgh07, :mgh35]
+for prob in [:hs30, :hs43, :mgh07] # :mgh35]
   prob_fn = eval(prob)
   nls = prob_fn()
   N   = nls.nls_meta.nequ

@@ -38,7 +38,6 @@ Construct a `MathOptNLSModel` from a `JuMP` model and a vector of `NonlinearExpr
 function MathOptNLSModel(cmodel :: JuMP.Model, F :: Vector{JuMP.NonlinearExpression}; name :: String="Generic")
 
   nvar = num_variables(cmodel)
-  nequ = num_nl_constraints(cmodel)
   vars = all_variables(cmodel)
   lvar = map(var -> has_lower_bound(var) ? lower_bound(var) : -Inf, vars)
   uvar = map(var -> has_upper_bound(var) ? upper_bound(var) :  Inf, vars)
@@ -49,8 +48,14 @@ function MathOptNLSModel(cmodel :: JuMP.Model, F :: Vector{JuMP.NonlinearExpress
     end
   end
 
+  ncon = num_nl_constraints(cmodel)
+  cons = cmodel.nlp_data.nlconstr
+  lcon = map(con -> con.lb, cons)
+  ucon = map(con -> con.ub, cons)
+
   @NLobjective(cmodel, Min, 0.5 * sum(Fi^2 for Fi in F))
   ceval = NLPEvaluator(cmodel)
+  MOI.initialize(ceval, [:Grad, :Jac, :Hess, :HessVec, :ExprGraph])  # Add :JacVec when available
 
   Fmodel = JuMP.Model()
   @variable(Fmodel, x[1:nvar])
@@ -58,13 +63,15 @@ function MathOptNLSModel(cmodel :: JuMP.Model, F :: Vector{JuMP.NonlinearExpress
   @NLobjective(Fmodel, Min, 0.0)
   Fmodel.nlp_data.user_operators = cmodel.nlp_data.user_operators
     for Fi in F
-    expr = ev.subexpressions_as_julia_expressions[Fi.index]
+    expr = ceval.subexpressions_as_julia_expressions[Fi.index]
     replace!(expr, x)
     expr = :($expr == 0)
     JuMP.add_NL_constraint(Fmodel, expr)
   end
 
+  nequ = num_nl_constraints(Fmodel)
   Feval = NLPEvaluator(Fmodel)
+  MOI.initialize(Feval, [:Grad, :Jac, :Hess, :HessVec, :ExprGraph])  # Add :JacVec when available
 
   jac_struct_Fmodel = MOI.jacobian_structure(Feval)
   Fjrows = map(t -> t[1], jac_struct_Fmodel)
@@ -90,8 +97,8 @@ function MathOptNLSModel(cmodel :: JuMP.Model, F :: Vector{JuMP.NonlinearExpress
                       y0=zeros(ncon),
                       lcon=lcon,
                       ucon=ucon,
-                      nnzj=nnzj,
-                      nnzh=nnzh,
+                      nnzj=length(cjrows),
+                      nnzh=length(chrows),
                       lin=[],
                       nln=collect(1:ncon),
                       minimize=objective_sense(cmodel) == MOI.MIN_SENSE,
