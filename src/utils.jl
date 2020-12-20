@@ -6,20 +6,28 @@ import NLPModels.increment!, NLPModels.decrement!
 using JuMP, MathOptInterface
 const MOI = MathOptInterface
 
+# SingleVariable
+const SV  = MOI.SingleVariable  # SingleVariable(variable)
+
 # ScalarAffineFunctions and VectorAffineFunctions
-const SAF = MOI.ScalarAffineFunction{Float64}
-const VAF = MOI.VectorAffineFunction{Float64}
+const SAF = MOI.ScalarAffineFunction{Float64}  # ScalarAffineFunction{T}(terms, constant) 
+const VAF = MOI.VectorAffineFunction{Float64}  # VectorAffineFunction{T}(terms, constants)
 const AF  = Union{SAF, VAF}
+
+# ScalarQuadraticFunctions and VectorQuadraticFunctions
+const SQF = MOI.ScalarQuadraticFunction{Float64}  # ScalarQuadraticFunction{T}(affine_terms, quadratic_terms, constant)
+const VQF = MOI.VectorQuadraticFunction{Float64}  # VectorQuadraticFunction{T}(affine_terms, quadratic_terms, constants)
+const QF  = Union{SQF, VQF}
 
 # AffLinSets and VecLinSets
 const ALS = Union{MOI.EqualTo{Float64}, MOI.GreaterThan{Float64}, MOI.LessThan{Float64}, MOI.Interval{Float64}}
 const VLS = Union{MOI.Nonnegatives, MOI.Nonpositives, MOI.Zeros}
 const LS  = Union{ALS, VLS}
 
-const SV  = MOI.SingleVariable
-const SQF = MOI.ScalarQuadraticFunction{Float64}
+# Objective
 const OBJ = Union{SV, SAF, SQF}
 
+# Coordinate Matrix
 mutable struct COO
   rows :: Vector{Int}
   cols :: Vector{Int}
@@ -31,6 +39,10 @@ COO() = COO(Int[], Int[], Float64[])
 mutable struct LinearConstraints
   jacobian :: COO
   nnzj     :: Int
+end
+
+mutable struct QuadraticConstraints
+  # TO DO
 end
 
 mutable struct LinearEquations
@@ -146,6 +158,40 @@ function parser_VAF(fun, set, linrows, lincols, linvals, nlin, lin_lcon, lin_uco
 end
 
 """
+    parser_SQF(fun, set, ...)
+
+Parse a `ScalarQuadraticFunction` fun with its associated set.
+"""
+function parser_SQF(fun, set, ...)
+
+  # Parse a ScalarAffineTerm{Float64}(coefficient, variable_index)
+  for term in fun.affine_terms
+    # TO DO
+  end
+
+  # Parse a ScalarQuadraticTerm{Float64}(coefficient, variable_index_1, variable_index_2)
+  for term in fun.quadratic_terms
+    # TO DO
+  end
+
+  if typeof(set) in (MOI.Interval{Float64}, MOI.GreaterThan{Float64})
+    push!(quad_lcon, -fun.constant + set.lower)
+  elseif typeof(set) == MOI.EqualTo{Float64}
+    push!(quad_lcon, -fun.constant + set.value)
+  else
+    push!(quad_lcon, -Inf)
+  end
+
+  if typeof(set) in (MOI.Interval{Float64}, MOI.LessThan{Float64})
+    push!(quad_ucon, -fun.constant + set.upper)
+  elseif typeof(set) == MOI.EqualTo{Float64}
+    push!(quad_ucon, -fun.constant + set.value)
+  else
+    push!(quad_ucon, Inf)
+  end
+end
+
+"""
     parser_MOI(moimodel)
 
 Parse linear constraints of a `MOI.ModelLike`.
@@ -163,7 +209,7 @@ function parser_MOI(moimodel)
   contypes = MOI.get(moimodel, MOI.ListOfConstraints())
   for (F, S) in contypes
     F == MOI.SingleVariable && continue
-    F <: AF || @warn("Function $F is not supported.")
+    F <: AF || F <: SQF || @warn("Function $F is not supported.")
     S <: LS || @warn("Set $S is not supported.")
 
     conindices = MOI.get(moimodel, MOI.ListOfConstraintIndices{F, S}())
@@ -177,6 +223,10 @@ function parser_MOI(moimodel)
       if typeof(fun) <: VAF
         parser_VAF(fun, set, linrows, lincols, linvals, nlin, lin_lcon, lin_ucon)
         nlin += set.dimension
+      end
+      if typeof(fun) <: SQF
+        parser_SQF(fun, set, ...)
+        # ...
       end
     end
   end
