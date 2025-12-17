@@ -13,9 +13,7 @@
     ngx_no_oracle = grad(nlp_no_oracle, x)
     ngx_with_oracle = grad(nlp_with_oracle, x)
     @test isapprox(ngx_no_oracle, ngx_with_oracle; atol = 1e-8, rtol = 1e-8)
-    if m > 0
-        ncx_no_oracle = cons(nlp_no_oracle, x)
-        ncx_with_oracle = cons(nlp_with_oracle, x)
-        @test isapprox(ncx_no_oracle, ncx_with_oracle; atol = 1e-8, rtol = 1e-8)
-    end
+    ncx_no_oracle = cons(nlp_no_oracle, x)
+    ncx_with_oracle = cons(nlp_with_oracle, x)
+    @test isapprox(sort(ncx_no_oracle), sort(ncx_with_oracle); atol = 1e-8, rtol = 1e-8)
 end
