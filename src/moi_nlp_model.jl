@@ -568,35 +568,45 @@ function NLPModels.hess_coord!(
 )
   increment!(nlp, :neval_hess)
 
-  # Running index over Hessian nonzeros we've filled so far.
-  index = 0
-
-  # Objective Hessian block
+  # 1. Quadratic objective block (if any)
   if nlp.obj.type == "QUADRATIC"
-    view(vals, 1:(nlp.obj.nnzh)) .= obj_weight .* nlp.obj.hessian.vals
-    index += nlp.obj.nnzh
+    view(vals, 1:nlp.obj.nnzh) .= obj_weight .* nlp.obj.hessian.vals
   end
-  # Nonlinear objective Hessian block
+
+  # 2. Nonlinear block (objective + JuMP @NLconstraint)
   if (nlp.obj.type == "NONLINEAR") || (nlp.meta.nnln > nlp.quadcon.nquad)
-    λ = view(y, (nlp.meta.nlin + nlp.quadcon.nquad + 1):(nlp.meta.ncon))
+    # Multipliers for the JuMP nonlinear constraints (not the oracles)
+    λ = view(
+      y,
+      (nlp.meta.nlin + nlp.quadcon.nquad + 1):(nlp.meta.ncon),
+    )
+
+    first_nl = nlp.obj.nnzh + nlp.quadcon.nnzh + 1
+    last_nl  = nlp.obj.nnzh + nlp.quadcon.nnzh + nlp.nlcon.nnzh
+
     MOI.eval_hessian_lagrangian(
       nlp.eval,
-      view(vals, (nlp.obj.nnzh + nlp.quadcon.nnzh + 1):(nlp.meta.nnzh)),
+      view(vals, first_nl:last_nl),
       x,
       obj_weight,
       λ,
     )
   end
-  # Quadratic constraint Hessian blocks
+
+  # 3. Quadratic constraint Hessian blocks
   if nlp.quadcon.nquad > 0
+    index = nlp.obj.nnzh
     for i = 1:(nlp.quadcon.nquad)
       qcon = nlp.quadcon.constraints[i]
-      view(vals, (index + 1):(index + qcon.nnzh)) .= y[nlp.meta.nlin + i] .* qcon.A.vals
+      ind = (index + 1):(index + qcon.nnzh)
+      view(vals, ind) .= y[nlp.meta.nlin + i] .* qcon.A.vals
       index += qcon.nnzh
     end
   end
-  # Oracle Hessian blocks
+
+  # 4. Oracle Hessian blocks are appended at the very end
   if !isempty(nlp.oracles_data.oracles)
+    # Multipliers for oracle constraints only
     λ_oracle_all = view(
       y,
       (nlp.meta.nlin + nlp.quadcon.nquad + nlp.nlcon.nnln + 1):
@@ -604,6 +614,9 @@ function NLPModels.hess_coord!(
     )
 
     λ_offset = 0
+    # Start after obj + quadcon + nonlinear block
+    index = nlp.obj.nnzh + nlp.quadcon.nnzh + nlp.nlcon.nnzh
+
     for (f, s) in nlp.oracles_data.oracles
       # build local x for this oracle
       for i in 1:s.set.input_dimension
@@ -622,10 +635,6 @@ function NLPModels.hess_coord!(
     end
   end
 
-  # TODO FIX: Assert fail for problem with nlp objective hs61
-  # println("Hessian nnz filled: ", index)
-  # println("Expected nnz: ", nlp.meta.nnzh)
-  # @assert index == nlp.meta.nnzh
   return vals
 end
 
